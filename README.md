@@ -42,8 +42,10 @@ asset it references, and writes `dist/`:
 Not "it looked fine." The build was checked against the live WordPress render at
 1280x3000 with headless Chrome:
 
-- **0.125% of bytes differ**, and that is text reflow from the spelling fixes
-  below, not layout
+- **0.28% of bytes differ against a 0.008% noise floor** (measured by rendering
+  the live page twice and diffing it against itself). Every differing row was
+  located and read: they are the spelling fixes below and the `wp-sentinel` ->
+  `sentinel` rename reflowing their own lines. No layout moved
 - **0 assets 404** during a full render
 - **0 `wp-` tokens** left in the output
 - the theme switcher was driven through the DevTools Protocol after the Breeze
@@ -71,5 +73,11 @@ No dependencies. `dist/` is committed so the deploy never depends on the scrape.
 ## Deploy
 
 `.github/workflows/deploy.yml` publishes `dist/` to GitHub Pages on push to
-`main`. `dist/CNAME` claims `marccangiano.com`, which does nothing until the DNS
-actually points at Pages.
+`main`.
+
+Asset paths are relative, not root relative, so the same build serves correctly
+from a Pages project subpath and from the domain root.
+
+`CNAME` is written only by `node build.js --cname`, and is deliberately not
+committed yet: claiming `marccangiano.com` on Pages before DNS moves would
+redirect the preview URL to an address Cloudways is still answering.

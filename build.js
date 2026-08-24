@@ -176,7 +176,11 @@ async function main() {
     for (const [url, rel] of map) {
       // Both the bare URL and any ?ver= variant point at the same file.
       const esc = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      text = text.replace(new RegExp(esc + "(\\?[^\"'\\s)]*)?", "g"), "/" + rel);
+      // Relative, not root relative. A Pages project site lives under
+      // /<repo>/, where a leading slash resolves to the wrong root. The page
+      // is a single file at the top level, so this works there and at the
+      // domain root without a second build.
+      text = text.replace(new RegExp(esc + "(\\?[^\"'\\s)]*)?", "g"), rel);
     }
     // Anything left pointing at the old origin becomes root relative.
     return text.replace(new RegExp(ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
@@ -195,8 +199,10 @@ async function main() {
 
   // Swap the Breeze bundle for the theme's own script.
   const toggle = await themeScript();
-  html = html.replace(/<script[^>]*src="\/assets\/site\.js"[^>]*><\/script>/,
+  const before = html;
+  html = html.replace(/<script[^>]*src="\/?assets\/site\.js"[^>]*><\/script>/,
     "<script>\n" + toggle + "\n</script>");
+  if (html === before) throw new Error("script tag for the dropped bundle was not found");
 
   // Canonical has to keep the real origin or it points at nothing.
   html = html.replace(/<link rel="canonical" href="\/"/, `<link rel="canonical" href="${CANONICAL}/"`);
@@ -213,7 +219,12 @@ async function main() {
     path.join(OUT, "sitemap.xml"),
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${CANONICAL}/</loc></url>\n</urlset>\n`
   );
-  await fs.writeFile(path.join(OUT, "CNAME"), "marccangiano.com\n");
+  // Only with --cname. Committing this makes Pages claim the domain, which
+  // redirects the github.io preview to an address still served by Cloudways,
+  // so the preview stops working before the DNS cutover has happened.
+  if (process.argv.includes("--cname")) {
+    await fs.writeFile(path.join(OUT, "CNAME"), "marccangiano.com\n");
+  }
   await fs.writeFile(path.join(OUT, ".nojekyll"), "");
 
   const tells = (html.match(/wp-(?!sentinel|e2e-kit)[a-z0-9-]+/g) || []);
