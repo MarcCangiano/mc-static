@@ -125,6 +125,13 @@ const SPELLING = [
   [/authorised/g, "authorized"],
   [/\bcolour\b/g, "color"],
 ];
+// The project is called sentinel on the site. The href still points at the
+// repo's real name, so only the link text changes here — renaming the repo is
+// a separate decision.
+function renameProjects(text) {
+  return text.replace(/>wp-sentinel</g, ">sentinel<");
+}
+
 function americanize(text) {
   for (const [re, to] of SPELLING) text = text.replace(re, to);
   return text;
@@ -184,7 +191,7 @@ async function main() {
 
   html = stripWordPress(html);
   html = dedupeMeta(html);
-  html = americanize(renameClasses(rename(rewrite(html))));
+  html = renameProjects(americanize(renameClasses(rename(rewrite(html)))));
 
   // Swap the Breeze bundle for the theme's own script.
   const toggle = await themeScript();
