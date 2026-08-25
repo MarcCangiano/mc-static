@@ -19,6 +19,38 @@ const path = require("node:path");
 const argOrigin = process.argv.find((a) => a.startsWith("--origin="));
 const ORIGIN = argOrigin ? argOrigin.split("=")[1].replace(/\/$/, "") : "https://marccangiano.com";
 const CANONICAL = "https://marccangiano.com";
+
+// After the cutover the domain resolves to GitHub Pages, so fetching ORIGIN
+// would scrape this build's own output. --resolve=<ip> pins every fetch to the
+// Cloudways box the WordPress install still lives on, with SNI and Host kept
+// as the real domain so the cert and vhost both match. curl --resolve, at home.
+const argResolve = process.argv.find((a) => a.startsWith("--resolve="));
+const PIN = argResolve ? argResolve.split("=")[1] : null;
+if (PIN) {
+  const https = require("node:https");
+  const { URL } = require("node:url");
+  globalThis.fetch = (input) =>
+    new Promise((resolve, reject) => {
+      const u = new URL(String(input));
+      const req = https.request(
+        { host: PIN, servername: u.hostname, path: u.pathname + u.search,
+          headers: { Host: u.hostname, "User-Agent": "mc-static-build" } },
+        (res) => {
+          const chunks = [];
+          res.on("data", (c) => chunks.push(c));
+          res.on("end", () => {
+            const buf = Buffer.concat(chunks);
+            resolve({ ok: res.statusCode >= 200 && res.statusCode < 300,
+              status: res.statusCode,
+              text: async () => buf.toString("utf8"),
+              arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) });
+          });
+        }
+      );
+      req.on("error", reject);
+      req.end();
+    });
+}
 const OUT = path.join(__dirname, "dist");
 const ASSETS = path.join(OUT, "assets");
 
@@ -132,6 +164,22 @@ function renameProjects(text) {
   return text.replace(/>wp-sentinel</g, ">sentinel<");
 }
 
+// The 400 draws in with a stroke animation whose clock starts when the CSS
+// parses, which is before first paint finishes, so on a cold load it appeared
+// mid-stroke. Push the whole choreography back half a second: draw, unstroke,
+// fill (CSS delays) and the shine gradient (an SMIL begin inside the SVG).
+function delayNumberDraw(css) {
+  return css
+    .replace("mc-num-draw 1.9s cubic-bezier(.35,0,.25,1) .4s",
+             "mc-num-draw 1.9s cubic-bezier(.35,0,.25,1) .9s")
+    .replace("mc-num-unstroke .8s ease 2.2s", "mc-num-unstroke .8s ease 2.7s")
+    .replace("mc-num-fill .8s cubic-bezier(.4,0,.2,1) 2.2s",
+             "mc-num-fill .8s cubic-bezier(.4,0,.2,1) 2.7s");
+}
+function delayNumberShine(html) {
+  return html.replace('begin="3.15s"', 'begin="3.65s"');
+}
+
 function americanize(text) {
   for (const [re, to] of SPELLING) text = text.replace(re, to);
   return text;
@@ -141,6 +189,43 @@ function americanize(text) {
 // cache and prefetch machinery, most of which checks whether the current URL
 // is wp-admin. None of that means anything on a static host, so the bundle is
 // dropped and the theme's own script is inlined from the theme source.
+// Breeze replaces every img src with a blank SVG data URI and parks the real
+// file in data-breeze, then swaps them back in JavaScript on scroll. Dropping
+// its bundle therefore left every photo as a transparent placeholder. Resolve
+// the swap here instead, at build time, so the images need no JavaScript at
+// all. loading="lazy" stays: the browser does that natively.
+function unlazy(html) {
+  return html.replace(/<img\b[^>]*>/g, (tag) => {
+    const real = /data-breeze="([^"]*)"/.exec(tag);
+    if (!real) return tag;
+    const srcset = /data-brsrcset="([^"]*)"/.exec(tag);
+    const sizes = /data-brsizes="([^"]*)"/.exec(tag);
+    let out = tag
+      .replace(/\ssrc="[^"]*"/, ` src="${real[1]}"`)
+      .replace(/\sdata-breeze="[^"]*"/, "")
+      .replace(/\sdata-brsrcset="[^"]*"/, "")
+      .replace(/\sdata-brsizes="[^"]*"/, "")
+      .replace(/\s?\bbr-lazy\b/, "");
+    if (srcset) out = out.replace(/(\s\/?>)$/, ` srcset="${srcset[1]}"$1`);
+    if (sizes) out = out.replace(/(\s\/?>)$/, ` sizes="${sizes[1]}"$1`);
+    return out.replace(/\s{2,}/g, " ");
+  });
+}
+
+// The theme has two scripts, not one. The inline toggle lives in the header
+// part; the back to top button, the nav close and the contact panel live in
+// assets/ui.js. Breeze concatenated both into its bundle, so dropping the
+// bundle dropped the second one too. Fetched from the live install rather than
+// read locally, because the local theme copy goes stale after admin edits.
+async function uiScript(origin) {
+  const url = origin + "/wp-content/themes/cangiano/assets/ui.js";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`ui.js not reachable at ${url} (${res.status})`);
+  const body = await res.text();
+  if (!/scroll/.test(body)) throw new Error("ui.js fetched but does not look like the UI script");
+  return body;
+}
+
 async function themeScript() {
   const part = path.join(process.env.HOME, "Documents/mc-theme/parts/header.html");
   const src = await fs.readFile(part, "utf8");
@@ -190,19 +275,27 @@ async function main() {
   // WordPress generated them; the values and cascade are untouched.
   const rename = (text) => text.replace(/--wp--/g, "--mc--");
 
-  css = americanize(renameClasses(rename(rewrite(css))));
+  css = delayNumberDraw(americanize(renameClasses(rename(rewrite(css)))));
   await fs.writeFile(path.join(OUT, "assets/site.css"), css);
 
   html = stripWordPress(html);
   html = dedupeMeta(html);
   html = renameProjects(americanize(renameClasses(rename(rewrite(html)))));
+  html = delayNumberShine(html);
+  if (!/begin="3\.65s"/.test(html)) throw new Error("shine delay did not apply");
 
   // Swap the Breeze bundle for the theme's own script.
   const toggle = await themeScript();
+  const ui = await uiScript(ORIGIN);
+  await fs.writeFile(path.join(OUT, "assets/ui.js"), ui);
   const before = html;
   html = html.replace(/<script[^>]*src="\/?assets\/site\.js"[^>]*><\/script>/,
-    "<script>\n" + toggle + "\n</script>");
+    "<script>\n" + toggle + "\n</script>\n<script src=\"assets/ui.js\" defer></script>");
   if (html === before) throw new Error("script tag for the dropped bundle was not found");
+
+  html = unlazy(html);
+  if (/data-breeze|br-lazy/.test(html)) throw new Error("lazy placeholders survived unlazy()");
+  if (/<img[^>]*src="data:image\/svg/.test(html)) throw new Error("an img is still a blank placeholder");
 
   // Canonical has to keep the real origin or it points at nothing.
   html = html.replace(/<link rel="canonical" href="\/"/, `<link rel="canonical" href="${CANONICAL}/"`);
