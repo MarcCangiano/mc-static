@@ -60,13 +60,27 @@ Six British spellings that had shipped live: `canonicalising`, `initialisation`,
 `authorised`, and three `colour`. The static build is the source of truth now, so
 they are fixed here.
 
+## Loading state
+
+While a photo streams in, its slot shows the site's own mark: the header's six
+bars and dot, pulsing on a staggered 1.3s loop, centered on that photo's
+dominant color (the image resized to one pixel at build time). The animation is
+SMIL inside a shared 600-byte SVG, because SMIL is the one animation tech that
+runs in SVG used as a CSS background — so the loading state, like everything
+else here, ships no JavaScript. Native `loading="lazy"` handles when to fetch.
+
 ## Build
 
 ```
-node build.js                          # from the live site
-node build.js --origin=https://...     # after the DNS cutover, point at wherever
-                                       # the WordPress install still lives
+node build.js --resolve=45.55.204.32 --cname
 ```
+
+`--resolve` pins every fetch to the Cloudways box the WordPress install still
+lives on, with SNI and Host kept as the real domain — necessary since the DNS
+cutover, because marccangiano.com now serves this build, and scraping it would
+scrape its own output. `--cname` writes the custom-domain file for Pages.
+ImageMagick is required (dominant colors). The WordPress install stays: it is
+the editing surface, the build source, and the rollback.
 
 No dependencies. `dist/` is committed so the deploy never depends on the scrape.
 
@@ -78,6 +92,21 @@ No dependencies. `dist/` is committed so the deploy never depends on the scrape.
 Asset paths are relative, not root relative, so the same build serves correctly
 from a Pages project subpath and from the domain root.
 
-`CNAME` is written only by `node build.js --cname`, and is deliberately not
-committed yet: claiming `marccangiano.com` on Pages before DNS moves would
-redirect the preview URL to an address Cloudways is still answering.
+The DNS cutover happened 2026-08-24: the apex A records point at GitHub's four
+Pages addresses, `www` is a CNAME to `marccangiano.github.io`, and the MX and
+TXT records were left untouched. `CNAME` is written by `--cname`.
+
+Post-cutover fixes, each found by looking at the live site rather than assuming:
+
+- Breeze had swapped every `img src` for a blank SVG placeholder with the real
+  file in `data-breeze`, restored by the bundle's scroll handler — so dropping
+  the bundle blanked every photo. The swap is resolved at build time now.
+- The back to top button lives in the theme's second script, `assets/ui.js`,
+  which Breeze had concatenated into the same bundle. Restored on its own tag.
+- The `400` stroke animation's clock started when the CSS parsed, before first
+  paint, so a cold load caught it mid-stroke. The choreography moved back 0.5s.
+- Wappalyzer still called the site WordPress: the single-dash editor variables
+  (`--wp-admin-theme-color` is literally one of its fingerprint patterns)
+  survived the double-dash rename, and the orphan `img.wp-smiley` rule rode
+  along in the minified CSS. Both gone; every Wappalyzer WordPress pattern now
+  tests clean against production.
