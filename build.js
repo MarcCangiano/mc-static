@@ -228,6 +228,31 @@ function unlazy(html) {
 // assets/ui.js. Breeze concatenated both into its bundle, so dropping the
 // bundle dropped the second one too. Fetched from the live install rather than
 // read locally, because the local theme copy goes stale after admin edits.
+// LQIP: a ~1KB blurred thumbnail of each photo, inlined as a background so
+// something image-shaped is there the instant the page paints and the real
+// file fades in over it. Pure CSS on top of native lazy loading; no runtime.
+// ImageMagick does the shrinking; the placeholder is 24px wide and the blur
+// comes from the browser scaling it back up.
+const { execFileSync } = require("node:child_process");
+function lqip(file) {
+  return execFileSync("magick", [file, "-resize", "24x", "-strip", "-quality", "35", "jpg:-"],
+    { maxBuffer: 1 << 20 }).toString("base64");
+}
+function inlinePlaceholders(html, outDir) {
+  let n = 0;
+  html = html.replace(/<img\b[^>]*>/g, (tag) => {
+    const m = /\ssrc="(assets\/img\/[^"]+)"/.exec(tag);
+    if (!m) return tag;
+    const b64 = lqip(path.join(outDir, m[1]));
+    n++;
+    return tag.replace(/(\s\/?>)$/,
+      ` style="background:url(data:image/jpeg;base64,${b64}) center/cover no-repeat"$1`);
+  });
+  if (!n) throw new Error("no images received a placeholder");
+  console.log(`inlined ${n} blur placeholders`);
+  return html;
+}
+
 async function uiScript(origin) {
   const url = origin + "/wp-content/themes/cangiano/assets/ui.js";
   const res = await fetch(url);
@@ -307,6 +332,7 @@ async function main() {
   html = unlazy(html);
   if (/data-breeze|br-lazy/.test(html)) throw new Error("lazy placeholders survived unlazy()");
   if (/<img[^>]*src="data:image\/svg/.test(html)) throw new Error("an img is still a blank placeholder");
+  html = inlinePlaceholders(html, OUT);
 
   // Canonical has to keep the real origin or it points at nothing.
   html = html.replace(/<link rel="canonical" href="\/"/, `<link rel="canonical" href="${CANONICAL}/"`);
