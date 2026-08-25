@@ -234,22 +234,23 @@ function unlazy(html) {
 // ImageMagick does the shrinking; the placeholder is 24px wide and the blur
 // comes from the browser scaling it back up.
 const { execFileSync } = require("node:child_process");
-function lqip(file) {
-  return execFileSync("magick", [file, "-resize", "24x", "-strip", "-quality", "35", "jpg:-"],
-    { maxBuffer: 1 << 20 }).toString("base64");
+function dominantColor(file) {
+  // Average the whole image down to one pixel and read it back as hex.
+  const out = execFileSync("magick",
+    [file, "-resize", "1x1!", "-format", "%[hex:p{0,0}]", "info:-"]).toString().trim();
+  return "#" + out.slice(0, 6).toLowerCase();
 }
 function inlinePlaceholders(html, outDir) {
   let n = 0;
   html = html.replace(/<img\b[^>]*>/g, (tag) => {
     const m = /\ssrc="(assets\/img\/[^"]+)"/.exec(tag);
     if (!m) return tag;
-    const b64 = lqip(path.join(outDir, m[1]));
+    const color = dominantColor(path.join(outDir, m[1]));
     n++;
-    return tag.replace(/(\s\/?>)$/,
-      ` style="background:url(data:image/jpeg;base64,${b64}) center/cover no-repeat"$1`);
+    return tag.replace(/(\s\/?>)$/, ` style="background:${color}"$1`);
   });
   if (!n) throw new Error("no images received a placeholder");
-  console.log(`inlined ${n} blur placeholders`);
+  console.log(`inlined ${n} dominant-color placeholders`);
   return html;
 }
 
