@@ -240,6 +240,27 @@ function dominantColor(file) {
     [file, "-resize", "1x1!", "-format", "%[hex:p{0,0}]", "info:-"]).toString().trim();
   return "#" + out.slice(0, 6).toLowerCase();
 }
+
+// The loading mark is the site's own logo: the same six bars and dot from the
+// header, pulsing like an equalizer while the photo streams in. SMIL, because
+// SMIL runs inside SVG used as a CSS background where JavaScript cannot.
+// Each bar animates height and y together so it grows from its center line.
+function loadingSvg() {
+  const bars = [[0, 52], [34, 76], [68, 28], [102, 92], [136, 60], [170, 40]];
+  const rects = bars.map(([x, h], i) => {
+    const hi = Math.round(h * 1.45);
+    const y = (hh) => 60 - hh / 2;
+    const begin = (i * 0.14).toFixed(2);
+    return `<rect x="${x}" width="26" rx="1" height="${h}" y="${y(h)}" fill="#fff" opacity=".22">` +
+      `<animate attributeName="height" values="${h};${hi};${h}" dur="1.3s" begin="${begin}s" repeatCount="indefinite" calcMode="spline" keySplines=".4 0 .2 1;.4 0 .2 1"/>` +
+      `<animate attributeName="y" values="${y(h)};${y(hi)};${y(h)}" dur="1.3s" begin="${begin}s" repeatCount="indefinite" calcMode="spline" keySplines=".4 0 .2 1;.4 0 .2 1"/>` +
+      `</rect>`;
+  }).join("");
+  const dot = `<circle cx="81" cy="60" r="5" fill="#9fd400">` +
+    `<animate attributeName="opacity" values="1;.3;1" dur="1.3s" repeatCount="indefinite"/></circle>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 120">${rects}${dot}</svg>`;
+}
+
 function inlinePlaceholders(html, outDir) {
   let n = 0;
   html = html.replace(/<img\b[^>]*>/g, (tag) => {
@@ -247,10 +268,11 @@ function inlinePlaceholders(html, outDir) {
     if (!m) return tag;
     const color = dominantColor(path.join(outDir, m[1]));
     n++;
-    return tag.replace(/(\s\/?>)$/, ` style="background:${color}"$1`);
+    return tag.replace(/(\s\/?>)$/,
+      ` style="background:url(assets/loading.svg) center/72px auto no-repeat ${color}"$1`);
   });
   if (!n) throw new Error("no images received a placeholder");
-  console.log(`inlined ${n} dominant-color placeholders`);
+  console.log(`inlined ${n} placeholders (logo loader over dominant color)`);
   return html;
 }
 
@@ -333,6 +355,7 @@ async function main() {
   html = unlazy(html);
   if (/data-breeze|br-lazy/.test(html)) throw new Error("lazy placeholders survived unlazy()");
   if (/<img[^>]*src="data:image\/svg/.test(html)) throw new Error("an img is still a blank placeholder");
+  await fs.writeFile(path.join(OUT, "assets/loading.svg"), loadingSvg());
   html = inlinePlaceholders(html, OUT);
 
   // Canonical has to keep the real origin or it points at nothing.
