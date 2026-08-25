@@ -131,6 +131,11 @@ function dedupeMeta(html) {
 // to the HTML and the stylesheet together so the selectors keep matching.
 // wp-sentinel and wp-e2e-kit are Marc's own project names and must survive.
 const CLASS_RENAMES = [
+  // Single-dash editor variables (--wp-admin-theme-color and friends). The
+  // double-dash --wp--preset family is renamed earlier; this catches the rest,
+  // and --wp-admin-theme-color is literally one of Wappalyzer's WordPress
+  // fingerprints.
+  ["--wp-", "--mc-"],
   ["wp-block-", "mc-block-"],
   ["wp-site-blocks", "mc-site-blocks"],
   ["wp-container-", "mc-container-"],
@@ -143,6 +148,12 @@ const CLASS_RENAMES = [
   ["wp-singular", "mc-singular"],
   ["wp-embed-responsive", "mc-embed-responsive"],
 ];
+// The emoji loader was stripped from the HTML, but Breeze's minified CSS
+// still carried its orphan rule. No element has either class anymore.
+function dropEmojiRule(text) {
+  return text.replace(/img\.wp-smiley,img\.emoji\{[^}]*\}/g, "");
+}
+
 function renameClasses(text) {
   for (const [from, to] of CLASS_RENAMES) text = text.split(from).join(to);
   return text;
@@ -275,7 +286,7 @@ async function main() {
   // WordPress generated them; the values and cascade are untouched.
   const rename = (text) => text.replace(/--wp--/g, "--mc--");
 
-  css = delayNumberDraw(americanize(renameClasses(rename(rewrite(css)))));
+  css = delayNumberDraw(americanize(renameClasses(dropEmojiRule(rename(rewrite(css))))));
   await fs.writeFile(path.join(OUT, "assets/site.css"), css);
 
   html = stripWordPress(html);
