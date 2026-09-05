@@ -304,7 +304,7 @@ const FORM_CSS = `.mc-sent{display:none;position:fixed;top:22px;left:50%;transfo
 // The submit confirmation lives at the TOP of the page, not beside the form.
 // _next returns to /#sent, and :target both reveals the notice and puts the
 // visitor at the top rather than dropping them at the bottom of a long page.
-const SENT_NOTICE = `<p id="sent" class="mc-sent" role="status">Thanks. That reached me, and I answer everything that arrives here.</p>`;
+const SENT_NOTICE = `<p id="sent" class="mc-sent" role="status">Thanks for reaching out to me. I will respond at the earliest time possible.</p>`;
 
 function injectSentNotice( html ) {
 	if ( html.includes( 'id="sent"' ) ) return html;
