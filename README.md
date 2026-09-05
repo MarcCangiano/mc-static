@@ -91,6 +91,11 @@ narrow.
 `_honey` is a honeypot, positioned off canvas. Bots fill it, people never see
 it, and FormSubmit drops anything that arrives with it set.
 
+`_next` sends the visitor back to `/#sent` instead of FormSubmit's own branded
+page. The confirmation itself is a `.mc-sent` paragraph that is `display:none`
+until `:target` matches, so the message appears only after a real submission
+and costs no JavaScript. Nothing about the form needs a script.
+
 It carries `autocomplete="new-password"`, `aria-hidden` and the LastPass and
 1Password ignore attributes, and every one of those is load bearing. With plain
 `autocomplete="off"` Chrome autofilled the field for anyone who had a saved
