@@ -293,6 +293,25 @@ async function themeScript() {
   return m[1].trim();
 }
 
+// The contact form is ours, not WordPress's. It is injected here as well as
+// living in dist/ so the two can never disagree: a rebuild that scraped the
+// origin would otherwise quietly drop it, and the loss would look like nothing
+// at all until someone tried to send a message.
+const CONTACT_SECTION = `<div class="mc-block-group is-nowrap is-layout-flex mc-container-core-group-is-layout-8e2d48a5 mc-block-group-is-layout-flex" style="margin-bottom:26px"><p class="mc-num mc-block-paragraph">07</p><h2 class="mc-block-heading" id="contact">Contact</h2></div><p class="mc-block-paragraph" style="font-size:clamp(17px, 1.5vw, 20px);line-height:1.55">Tell me what you need. I read everything that comes through here.</p><form class="mc-form" method="post" action="https://formsubmit.co/me@marccangiano.com"><div class="mc-hp" aria-hidden="true"><label for="mc-hp">Leave this empty</label><input type="text" id="mc-hp" name="_honey" tabindex="-1" autocomplete="off"></div><div class="mc-row"><div class="mc-f"><label for="mc-name">Name <span class="mc-req">*</span></label><input id="mc-name" type="text" name="name" autocomplete="name" required></div><div class="mc-f"><label for="mc-email">Email <span class="mc-req">*</span></label><input id="mc-email" type="email" name="email" autocomplete="email" spellcheck="false" required></div></div><div class="mc-f"><label for="mc-phone">Phone</label><input id="mc-phone" type="tel" name="phone" autocomplete="tel"></div><div class="mc-f"><label for="mc-message">Message</label><textarea id="mc-message" name="message" rows="6"></textarea></div><input type="hidden" name="_subject" value="marccangiano.com inquiry"><input type="hidden" name="_captcha" value="false"><button type="submit">Send</button></form>`;
+
+const FORM_CSS = `.mc-form{display:grid;gap:22px;margin-top:26px;font-size:clamp(17px, 1.5vw, 20px);max-width:68ch}.mc-form .mc-f{display:grid;gap:9px}.mc-form .mc-row{display:grid;gap:22px;grid-template-columns:1fr 1fr}@media(max-width:640px){.mc-form .mc-row{grid-template-columns:1fr}}.mc-form label{font-family:var(--mc--preset--font-family--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mc--preset--color--muted)}.mc-form .mc-req{color:var(--mc--preset--color--accent)}.mc-form input,.mc-form textarea{width:100%;box-sizing:border-box;background:transparent;color:var(--mc--preset--color--contrast);border:1px solid var(--mc--preset--color--line);border-radius:2px;padding:13px 14px;font-family:inherit;font-size:16px;line-height:1.5;transition:border-color .2s ease}.mc-form textarea{min-height:150px;resize:vertical}.mc-form input:focus,.mc-form textarea:focus{outline:none;border-color:var(--mc--preset--color--accent)}.mc-form input:-webkit-autofill{-webkit-text-fill-color:var(--mc--preset--color--contrast);-webkit-box-shadow:0 0 0 1000px var(--mc--preset--color--base) inset}.mc-form button{justify-self:start;background:var(--mc--preset--color--accent);color:var(--mc--preset--color--base);border:1px solid var(--mc--preset--color--accent);border-radius:2px;padding:14px 30px;font-family:var(--mc--preset--font-family--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:opacity .2s ease}.mc-form button:hover,.mc-form button:focus-visible{opacity:.85}.mc-hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important}`;
+
+function injectContact(html) {
+  // Last </div></main> closes entry-content, whose constrained layout centers
+  // its direct children on the content column. That is how the form picks up
+  // the same measure as the prose without repeating any of its numbers.
+  const anchor = "</div></main>";
+  const i = html.lastIndexOf(anchor);
+  if (i < 0) throw new Error("end of entry-content not found; contact form not injected");
+  if (html.includes('class="mc-form"')) return html;
+  return html.slice(0, i) + CONTACT_SECTION + html.slice(i);
+}
+
 async function main() {
   await fs.rm(OUT, { recursive: true, force: true });
   await fs.mkdir(ASSETS, { recursive: true });
@@ -335,7 +354,7 @@ async function main() {
   const rename = (text) => text.replace(/--wp--/g, "--mc--");
 
   css = delayNumberDraw(americanize(renameClasses(dropEmojiRule(rename(rewrite(css))))));
-  await fs.writeFile(path.join(OUT, "assets/site.css"), css);
+  await fs.writeFile(path.join(OUT, "assets/site.css"), css + FORM_CSS);
 
   html = stripWordPress(html);
   html = dedupeMeta(html);
@@ -362,6 +381,7 @@ async function main() {
   html = html.replace(/<link rel="canonical" href="\/"/, `<link rel="canonical" href="${CANONICAL}/"`);
   html = html.replace(/(<meta property="og:url" content=")\//, `$1${CANONICAL}/`);
 
+  html = injectContact(html);
   await fs.writeFile(path.join(OUT, "index.html"), html);
 
   // WordPress generated these two; nothing does now.
