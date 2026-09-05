@@ -91,6 +91,15 @@ narrow.
 `_honey` is a honeypot, positioned off canvas. Bots fill it, people never see
 it, and FormSubmit drops anything that arrives with it set.
 
+It carries `autocomplete="new-password"`, `aria-hidden` and the LastPass and
+1Password ignore attributes, and every one of those is load bearing. With plain
+`autocomplete="off"` Chrome autofilled the field for anyone who had a saved
+address, FormSubmit binned the submission as a bot, and the visitor still got
+the "Thanks!" page. It failed silently and only for real people: curl and a
+headless browser both have no autofill profile, so every automated test passed
+while the live form dropped everything. `off` is a hint Chrome ignores for name
+and address fields; `new-password` is the value it honours.
+
 The form is injected by `injectContact()` in `build.js` **and** stored in
 `dist/`. Both, deliberately. `dist/` is the source of truth, but a rebuild
 against the origin would otherwise scrape a page that has no form and quietly
