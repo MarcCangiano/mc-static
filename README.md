@@ -69,6 +69,35 @@ SMIL inside a shared 600-byte SVG, because SMIL is the one animation tech that
 runs in SVG used as a CSS background — so the loading state, like everything
 else here, ships no JavaScript. Native `loading="lazy"` handles when to fetch.
 
+## Contact form
+
+Posts to FormSubmit, the same destination as the Cangiano Industries and
+Property Code forms, so everything lands in one inbox. No JavaScript, no
+backend, no third party embed.
+
+It is built from this site's own tokens rather than carried over as WPForms
+markup: mono uppercase labels, the accent on the required marks and the button,
+inputs that are a one pixel line until focus. Every color is a token, so the
+theme switcher takes the form into light with it and there is no second set of
+rules to keep in sync.
+
+Two measurements set the column, because guessing at it was visibly wrong the
+first time. `.mc-block-post-content>p` measures `68ch`, and `ch` resolves
+against the element's own font size, so the form also carries the
+`clamp(17px, 1.5vw, 20px)` the body copy sets inline. Without that second half
+the form came out 685px against the prose column's 819 and sat noticeably
+narrow.
+
+`_honey` is a honeypot, positioned off canvas. Bots fill it, people never see
+it, and FormSubmit drops anything that arrives with it set.
+
+The form is injected by `injectContact()` in `build.js` **and** stored in
+`dist/`. Both, deliberately. `dist/` is the source of truth, but a rebuild
+against the origin would otherwise scrape a page that has no form and quietly
+overwrite it, and that particular loss looks like nothing at all until someone
+tries to send a message. The function throws if its insertion point is missing
+rather than writing a contactless page.
+
 ## Build
 
 ```
