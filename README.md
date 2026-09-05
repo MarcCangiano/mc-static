@@ -91,6 +91,13 @@ narrow.
 `_honey` is a honeypot, positioned off canvas. Bots fill it, people never see
 it, and FormSubmit drops anything that arrives with it set.
 
+The notice clears itself after three seconds, and a few lines appended to
+`ui.js` then strip `#sent` from the address bar. Without that the fragment
+survives a reload and `:target` replays the notice on every refresh, which is
+exactly what it did at first. The script is progressive enhancement: with
+JavaScript off the CSS still hides the notice on time, the URL just keeps the
+fragment.
+
 `_next` sends the visitor back to `/#sent` instead of FormSubmit's own branded
 page. The confirmation itself is a `.mc-sent` paragraph that is `display:none`
 until `:target` matches, so the message appears only after a real submission

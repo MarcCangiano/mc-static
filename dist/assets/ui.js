@@ -101,3 +101,15 @@
 		}
 	} );
 }() );
+
+
+/* Clear #sent from the address bar once the notice has shown, so a refresh
+   does not replay it. Progressive enhancement only: with JS off the CSS
+   animation still hides the notice, the fragment simply persists. */
+(function(){
+	if(location.hash!=='#sent')return;
+	var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	setTimeout(function(){
+		try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+	},reduce?3000:3600);
+}());
