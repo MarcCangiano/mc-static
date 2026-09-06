@@ -113,3 +113,33 @@
 		try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
 	},reduce?3000:3600);
 }());
+
+(function () {
+  var box = document.querySelector('[data-mc-check]');
+  if (!box) return;
+  var input = box.querySelector('input[type="checkbox"]');
+  var elapsed = document.querySelector('input[name="_elapsed"]');
+  var started = Date.now();
+
+  input.addEventListener('click', function (e) {
+    // Confirmed is a one-way door.
+    if (input.dataset.locked === '1') { e.preventDefault(); return; }
+  });
+
+  input.addEventListener('change', function () {
+    if (!input.checked) return;
+    input.dataset.locked = '1';
+    box.classList.add('is-done');
+    /* Not aria-disabled: the value is still submitted, so calling it disabled
+       would be a lie to assistive tech and would stop it being focusable.
+       aria-readonly says what is actually true — it can be read, not changed. */
+    input.setAttribute('aria-readonly', 'true');
+  });
+
+  var form = box.closest('form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      if (elapsed) elapsed.value = String(Math.round((Date.now() - started) / 1000));
+    });
+  }
+}());
